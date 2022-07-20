@@ -4,9 +4,9 @@ using UnityEngine;
 
 public abstract class GridRender : MonoBehaviour
 {
-    public void SetGridBlocks(Block[,] blocks, float squerRenderSize)
+    public void SetGridBlocks(TetreminoBlock[,] blocks, float squerRenderSize)
     {
-        Sprite defaluteSprite = Resources.Load<Sprite>("defalutSquer");
+        Sprite defaulteSprite = Resources.Load<Sprite>("DefalutSquare");
 
         for (int x = 0; x < blocks.GetLength(0); x++)
         {
@@ -20,23 +20,16 @@ public abstract class GridRender : MonoBehaviour
                 GameObject gameObject = new GameObject("render");
 
                 SpriteRenderer spriteRenderer = gameObject.AddComponent<SpriteRenderer>() as SpriteRenderer;
-                spriteRenderer.sprite = defaluteSprite;
-
+                spriteRenderer.sprite = defaulteSprite;
                 spriteRenderer.color = blocks[x, y].color;
-
-
-
                 gameObject.transform.localScale = new Vector3(squerRenderSize, squerRenderSize, squerRenderSize);
-
                 gameObject.transform.SetParent(this.gameObject.transform);
-
                 gameObject.transform.localPosition = GetGridBlockPosition(x, y, blocks, squerRenderSize);
             }
         }
-
     }
 
-    public abstract Vector3 GetGridBlockPosition(int x, int y , Block[,] blocks, float squerRenderSize);
+    public abstract Vector3 GetGridBlockPosition(int x, int y , TetreminoBlock[,] blocks, float squerRenderSize);
 
     public void ClearGridRender()
     {

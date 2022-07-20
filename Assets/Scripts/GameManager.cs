@@ -1,19 +1,19 @@
-﻿using System.Collections;
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using UnityEngine;
-using System;
-using System.Reflection;
-using System.Linq;
 
-public class GameManager : MonoBehaviour
+public class GameManager: MonoBehaviour
 {
-    private Tetremino curentFallingTetremino;
+   public const int tetreminoBlocksArrayLen = 3; // can't by changed
+
+    private int curentFallingTetremino_Id;
 
     private float lastTickTime;
 
     [SerializeField] private float timeBetweenTicks;
 
-    [SerializeField] private Collider2D gameArea; // this canvar represent the area 
+    [SerializeField] private Collider2D gameArea; // this canvas represent the area 
+
+    [SerializeField] GameObject loseScreen;
 
     private float tetreminoBlockScale;
 
@@ -23,56 +23,42 @@ public class GameManager : MonoBehaviour
     private float gameArea_xMin;
     private float gameArea_xMax;
 
-    private Vector2 tetreminoStartPosition; // the position were all the tetreminos are crated
-
-    private int curenFalingTetreminoColom;
-    private int curentFallingTetreminoLine;
-
-    private int tetreminoStartLine;
-    private int tetreminoStartColom;
-
-    private const int numOfLines = 25;
+    private const int numOfLines = 20; // needs to be an even number
     private int numOfColoms;
 
-    private const int aditionalStartLines = 5;
+    private int startLine;
+    private int startColom;
 
-    private float tetreminoMoveSideUnit;
-    private float tetreminoMoveDownUnit;
+    private GameBoard gameBoard;
 
-    private GameBord gameBord;
 
     private void Start()
     {
+        loseScreen.SetActive(false);
+
         gameArea_yMin = gameArea.bounds.min.y;
         gameArea_yMax = gameArea.bounds.max.y;
 
         gameArea_xMin = gameArea.bounds.min.x;
         gameArea_xMax = gameArea.bounds.max.x;
 
-        tetreminoBlockScale = CalculteTetreminoBlockScale();
+        tetreminoBlockScale = CalculateTetreminoBlockScale();
 
-        numOfColoms = CalculateNumOfColoms(out tetreminoMoveSideUnit);
+        numOfColoms = CalculateNumOfColumns();
 
-        tetreminoMoveDownUnit = tetreminoBlockScale;
+        startLine = numOfLines;
+        startColom = numOfColoms / 2;
 
-        tetreminoStartPosition = CalculateTetreminoStartPosition(out tetreminoStartLine , out tetreminoStartColom);
+        gameBoard = CrateGameBoard();
 
-        Tetremino.SetTetreminosMoveToSideUnit(tetreminoMoveSideUnit);
-        Tetremino.SetTetremionoMoveDownUnit(tetreminoMoveDownUnit);
-
-        Tetremino.SetTetreminoBlockScale(tetreminoBlockScale);
-
-        gameBord = CrateGameBord();
-
-        CrateRandomTereminoAndSetAsCurent(); // crate the first falling tetremino
+        CreateRandomTereminoAndSetAsCurrent();
 
         lastTickTime = Time.time;
     }
 
-
     private void Update()
     {
-        HandeMoveCurentFallingTtreminoBasedOnIput();
+        HandeMoveCurentFallingTtreminoBasedOnInput();
 
         float curentTime = Time.time;
 
@@ -86,187 +72,123 @@ public class GameManager : MonoBehaviour
 
     private void OnTick()
     {
-        MoveDownCurentTetremino();
-        curentFallingTetreminoLine--;
-
-        if (TetremiinoShouldStopFalling())
+        if (!gameBoard.TryMoveDownTetremino(curentFallingTetremino_Id))
         {
-            
-            AddCurentFallngTetreminoToBord();
-
-            Destroy(curentFallingTetremino.gameObject);
-
-            gameBord.HandelDestroyLines();
-
-            CrateRandomTereminoAndSetAsCurent();
+            HandelCurentFallingTetreminoStopFall();
         }
 
         lastTickTime = Time.time;
     }
 
-    private void HandeMoveCurentFallingTtreminoBasedOnIput()
+    private void HandelCurentFallingTetreminoStopFall()
+    {
+        gameBoard.HandleDestroyLinesAndMoveDowndBlocks();
+        CreateRandomTereminoAndSetAsCurrent();
+    }
+
+    private void HandelLose()
+    {
+        loseScreen.SetActive(true);
+        Destroy(this);
+    }
+
+    private void HandeMoveCurentFallingTtreminoBasedOnInput()
     {
         if (!Input.anyKeyDown)
         {
             return;
         }
 
-        if (Input.GetKeyDown(KeyCode.A))
+        else if (Input.GetKey(KeyCode.DownArrow))
         {
-            if (curenFalingTetreminoColom == 0)
+            if (!gameBoard.TryMoveDownTetremino(curentFallingTetremino_Id))
             {
-                return;
+                HandelCurentFallingTetreminoStopFall();
             }
-
-            curentFallingTetremino.MoveLeft();
-            curenFalingTetreminoColom--;
         }
-        else if (Input.GetKeyDown(KeyCode.D))
-        {
-            if (curenFalingTetreminoColom == numOfColoms - Tetremino.TetreminoVerticesSize - 1)
-            {
-                return;
-            }
 
-            curentFallingTetremino.MoveRight();
-            curenFalingTetreminoColom++;
-        }
-        else if (Input.GetKeyDown(KeyCode.RightArrow))
+        if (Input.GetKeyDown(KeyCode.RightArrow))
         {
-            curentFallingTetremino.RotateRight();
+            gameBoard.TryMoveRightTetremino(curentFallingTetremino_Id);
         }
         else if (Input.GetKeyDown(KeyCode.LeftArrow))
         {
-            curentFallingTetremino.RotatateLeft();
+            gameBoard.TryMoveLeftTetremino(curentFallingTetremino_Id);
         }
-    }
-    private void MoveDownCurentTetremino()
-    {
-        curentFallingTetremino.MoveDown();
-    }
-    private bool TetremiinoShouldStopFalling()
-    {
-        int[] tetreminoBlocksHights = new int[Tetremino.TetreminoVerticesSize];
-
-        for(int x = 0; x < Tetremino.TetreminoVerticesSize; x++)
+        else if (Input.GetKeyDown(KeyCode.UpArrow))
         {
-            for(int y = 0; y < Tetremino.TetreminoVerticesSize; y++)
-            {
-                if(curentFallingTetremino.TetreminoBlocks[(Tetremino.TetreminoVerticesSize - 1) - y,x] != null)
-                {
-                    tetreminoBlocksHights[x] = y;
-                    break;
-                }
-                else if(y == Tetremino.TetreminoVerticesSize - 1)
-                {
-                    tetreminoBlocksHights[x] = -1000;
-                }
-            }
+            gameBoard.TryRotateTetremino(curentFallingTetremino_Id);
         }
-
-        for(int i = 0; i < Tetremino.TetreminoVerticesSize; i++)
-        {
-            if(tetreminoBlocksHights[i] != -1000)
-            {
-                if (gameBord.IsContainBlock(curenFalingTetreminoColom + i, (curentFallingTetreminoLine + tetreminoBlocksHights[i])))
-                {
-                    return true;
-                }
-            }
-        }
-
-        if(curentFallingTetreminoLine == 0)
-        {
-            return true;
-        }
-        return false;
     }
 
-
-
-    private GameBord CrateGameBord()
+    private GameBoard CrateGameBoard()
     {
-        GameObject gameObject = new GameObject("game bord");
+        GameObject gameObject = new GameObject("game board");
 
-        GameBord gameBord = gameObject.AddComponent<GameBord>() as GameBord;
-        gameBord.CrateBord(gameArea_xMin , gameArea_yMin , numOfColoms, numOfLines + aditionalStartLines, tetreminoBlockScale);
+        GameBoard gameBoard = gameObject.AddComponent<GameBoard>() as GameBoard;
+        gameBoard.CreateBoard(gameArea_xMin, gameArea_yMin, numOfColoms + 1, numOfLines + 1, tetreminoBlockScale);
 
-        return gameBord;
-
+        return gameBoard;
     }
 
-
-    private void AddCurentFallngTetreminoToBord()
+    private void CreateRandomTereminoAndSetAsCurrent()
     {
-        gameBord.AddBlocksToBord(curentFallingTetremino.TetreminoBlocks, curenFalingTetreminoColom + 1, curentFallingTetreminoLine);
-    }
+        TetreminoBlock block_1 = new TetreminoBlock(Color.red, tetreminoBlockScale);
+        TetreminoBlock[,] tetremino_1_blocks = {    { null   , null    , null },
+                                                    { null   , block_1  , null },
+                                                    { block_1 , block_1  ,block_1}};
 
-    private void CrateRandomTereminoAndSetAsCurent()
-    {
-        Type[] tetreminosTypes = GetTetreminos();
+
+        TetreminoBlock block_2 = new TetreminoBlock(Color.blue, tetreminoBlockScale);
+        TetreminoBlock[,] tetremino_2_blocks = {    {null    ,  null ,     null } ,
+                                                    {block_2 ,  null ,     null } ,
+                                                    {block_2 , block_2 , block_2 } };
+
+        TetreminoBlock block_3 = new TetreminoBlock(Color.red, tetreminoBlockScale);
+        TetreminoBlock[,] tetremino_3_blocks = {    { null , block_3 , null} ,
+                                                    { null , block_3 , null } ,
+                                                    { null , block_3 , null} };
+
+        TetreminoBlock block_4 = new TetreminoBlock(Color.yellow, tetreminoBlockScale);
+        TetreminoBlock[,] tetremino_4_blocks = {    { null , null , null} ,
+                                                    { block_4 , block_4 , null } ,
+                                                    { null , block_4 , block_4} };
+
+        TetreminoBlock block_5 = new TetreminoBlock(Color.red, tetreminoBlockScale);
+        TetreminoBlock[,] tetremino_5_blocks = { { null , null , null } ,
+                                                 {null , block_5 , block_5 } ,
+                                                 { block_5 , block_5 , null } };
+
+        List<TetreminoBlock[,]> tetreminosBlocks = new List<TetreminoBlock[,]>();
+
+        tetreminosBlocks.Add(tetremino_1_blocks);
+        tetreminosBlocks.Add(tetremino_2_blocks);
+        tetreminosBlocks.Add(tetremino_3_blocks);
+        tetreminosBlocks.Add(tetremino_4_blocks);
+        tetreminosBlocks.Add(tetremino_5_blocks);
 
         System.Random random = new System.Random();
+        int randomTetreminoIndex = random.Next(tetreminosBlocks.Count - 1);
 
-        int randomTetreminoIndex = random.Next(0 , tetreminosTypes.Length);
 
-        curentFallingTetremino = CrateTetremino(tetreminosTypes[randomTetreminoIndex]);
+        curentFallingTetremino_Id = gameBoard.AddTetreminoToBoard(tetreminosBlocks[randomTetreminoIndex], startColom , startLine, out bool genOnOtherBlock);
+
+        if (genOnOtherBlock)
+        {
+            HandelLose();
+        }
     }
 
-    Type[] GetTetreminos()
+    private int CalculateNumOfColumns()
     {
-        IEnumerable tetremonosTypes = Assembly.GetAssembly(typeof(Tetremino)).GetTypes().Where(type => type.IsSubclassOf(typeof(Tetremino)));
-
-        Type[] types = tetremonosTypes.Cast<Type>().ToArray();
-
-        return types;
-
+        int numOfColumns = (int)((Mathf.Abs(gameArea_xMin) + Mathf.Abs(gameArea_xMax) - (tetreminoBlockScale / 2)) / tetreminoBlockScale);
+        return numOfColumns;
     }
 
 
-    private Tetremino CrateTetremino(Type t)
-    {
-        GameObject gameObject = new GameObject("tetremino");
-        gameObject.transform.position = tetreminoStartPosition;
-
-        Tetremino tetremino = gameObject.AddComponent(t) as Tetremino;
-
-        tetremino.CrateTetremino();
-
-        curentFallingTetreminoLine = tetreminoStartLine;
-        curenFalingTetreminoColom = tetreminoStartColom;
-
-        return tetremino;
-    }
-
-    private Vector2 CalculateTetreminoStartPosition(out int tetreminoStartLine , out int tetreminoStartColom)
-    {
-        tetreminoStartLine = ((numOfLines + aditionalStartLines) - 1) - (Tetremino.TetreminoVerticesSize);
-        tetreminoStartColom = 0;
-
-        float y = gameArea_yMin + ((tetreminoStartLine) * tetreminoBlockScale) + ((Tetremino.TetreminoVerticesSize * tetreminoBlockScale) / 2);
-
-        float x = gameArea_xMin + ((Tetremino.TetreminoVerticesSize * tetreminoBlockScale) / 2);
-
-        return new Vector2(x, y);
-    }
-    
-    private int CalculateNumOfColoms(out float tetereminoSideMoveUnit)
-    {
-        tetereminoSideMoveUnit = tetreminoBlockScale;
-
-        int numOfColoms = (int)((Mathf.Abs(gameArea_xMin) + Mathf.Abs(gameArea_xMax)) / (tetreminoMoveSideUnit));
-
-        return numOfColoms;
-    }
- 
-
-    private float CalculteTetreminoBlockScale()
+    private float CalculateTetreminoBlockScale()
     {
         float blocksScaleInHight = (Mathf.Abs(gameArea_yMin) + Mathf.Abs(gameArea_yMax)) / numOfLines;
-
         return blocksScaleInHight;
-
-
     }
-
 }
